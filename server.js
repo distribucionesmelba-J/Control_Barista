@@ -2,7 +2,9 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 
-// Contador de servicios (inicial)
+// ==============================
+// Contador de servicios en memoria
+// ==============================
 let serviciosDisponibles = 0;
 
 const app = express();
@@ -11,7 +13,25 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+// ==============================
+// RUTA RAÍZ ( / )
+// ==============================
+app.get("/", (req, res) => {
+  res.json({
+    ok: true,
+    message: "Control Barista backend ONLINE ☕🚀",
+    endpoints: {
+      ping: "/ping",
+      consultarServicios: "/servicios",
+      sumarServiciosTest: "/servicios/test-sumar?cantidad=5",
+      webhookSumUp: "/sumup/webhook"
+    }
+  });
+});
+
+// ==============================
 // Ruta de prueba
+// ==============================
 app.get("/ping", (req, res) => {
   res.json({
     ok: true,
@@ -19,16 +39,21 @@ app.get("/ping", (req, res) => {
   });
 });
 
+// ==============================
 // Consultar servicios disponibles
+// ==============================
 app.get("/servicios", (req, res) => {
   res.json({
-    servicios: serviciosDisponibles
+    totalServicios: serviciosDisponibles
   });
 });
 
-// Sumar servicios (ej: viene de un pago SumUp o prueba manual)
-app.post("/servicios/sumar", (req, res) => {
-  const { cantidad } = req.body;
+// ==============================
+// Sumar servicios (TEST manual GET)
+// Ejemplo: GET /servicios/test-sumar?cantidad=3
+// ==============================
+app.get("/servicios/test-sumar", (req, res) => {
+  const cantidad = parseInt(req.query.cantidad || "0", 10);
 
   if (!cantidad || cantidad <= 0) {
     return res.status(400).json({ error: "Cantidad inválida" });
@@ -38,55 +63,29 @@ app.post("/servicios/sumar", (req, res) => {
 
   res.json({
     ok: true,
-    serviciosDisponibles
+    mensaje: `Se han sumado ${cantidad} servicios (TEST).`,
+    totalServicios: serviciosDisponibles
   });
 });
 
-// Restar servicios (lo usa el ESP32 al dar un servicio)
-app.post("/servicios/restar", (req, res) => {
-  if (serviciosDisponibles > 0) {
-    serviciosDisponibles -= 1;
-  }
-
-  res.json({
-    ok: true,
-    serviciosDisponibles
-  });
-});
-
-// WEBHOOK DE SUMUP - Notificación de pago
-app.post("/webhook/sumup", (req, res) => {
+// ==============================
+// Webhook SumUp (cuando lo conectemos de verdad)
+// URL para configurar en SumUp: https://control-barista.onrender.com/sumup/webhook
+// ==============================
+app.post("/sumup/webhook", (req, res) => {
+  // De momento solo registramos lo que llegue
   console.log("📩 Webhook SumUp recibido:", req.body);
 
-  const event = req.body;
+  // Aquí más adelante:
+  // - Validaremos la firma del webhook
+  // - Sumaremos servicios según el importe del pago
 
-  // Estado del pago (distintos campos posibles según el tipo de webhook)
-  const estado = event.status || event.transaction_status || null;
-
-  if (estado === "SUCCESSFUL" || estado === "PAID" || estado === "COMPLETED") {
-    // Intentar leer el monto de varios campos posibles
-    const monto =
-      Number(event.amount) ||
-      Number(event.transaction_amount) ||
-      Number(event.transaction?.amount) ||
-      0;
-
-    if (monto > 0) {
-      serviciosDisponibles += monto;
-      console.log(
-        `✅ Pago SumUp confirmado: +${monto} servicios. Total ahora: ${serviciosDisponibles}`
-      );
-    } else {
-      console.log("⚠️ Webhook recibido, pero no se pudo leer el monto.");
-    }
-  } else {
-    console.log("⚠️ Webhook con estado no exitoso:", estado);
-  }
-
-  // Responder siempre 200 para que SumUp no reintente indefinidamente
-  res.status(200).json({ ok: true });
+  res.json({ ok: true });
 });
 
+// ==============================
+// Arrancar servidor
+// ==============================
 app.listen(PORT, () => {
   console.log(`Servidor escuchando en http://localhost:${PORT}`);
 });
